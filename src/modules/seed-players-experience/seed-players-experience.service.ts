@@ -21,7 +21,7 @@ export class SeedPlayersExperienceService {
     return data.highscores.highscore_list;
   }
 
-  @Cron('31 23 * * *')
+  @Cron('0 * * * *')
   async seedPlayersExperience() {
     try {
       const { worlds } = await this.worldsService.getAllWorlds();
