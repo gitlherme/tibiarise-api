@@ -6,6 +6,7 @@ import { ConfigModule } from '@nestjs/config';
 import * as http from 'node:http';
 import { WorldsModule } from '../worlds/worlds.module';
 import { WorldsService } from '../worlds/worlds.service';
+import { PrismaService } from 'src/prisma.service';
 
 @Module({
   imports: [
@@ -21,6 +22,6 @@ import { WorldsService } from '../worlds/worlds.service';
     WorldsModule,
   ],
   controllers: [SeedPlayersExperienceController],
-  providers: [SeedPlayersExperienceService, WorldsService],
+  providers: [SeedPlayersExperienceService, WorldsService, PrismaService],
 })
 export class SeedPlayersExperienceModule {}

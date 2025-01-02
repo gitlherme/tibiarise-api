@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { WorldsService } from '../worlds/worlds.service';
-import { Highscores } from './entities/seed-players-experience.entity';
-import { supabase } from 'src/lib/supabase.lib';
+import {
+  HighscoreList,
+  Highscores,
+} from './entities/seed-players-experience.entity';
 import { Cron } from '@nestjs/schedule';
+import { PrismaService } from 'src/prisma.service';
+import { Character } from '@prisma/client';
 
 @Injectable()
 export class SeedPlayersExperienceService {
@@ -12,6 +16,7 @@ export class SeedPlayersExperienceService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly worldsService: WorldsService,
+    private readonly prismaService: PrismaService,
   ) {}
 
   async fetchHighscorePage(page: number, world: string) {
@@ -21,7 +26,20 @@ export class SeedPlayersExperienceService {
     return data.highscores.highscore_list;
   }
 
-  @Cron('0 * * * *')
+  async createDailyExperience(character: Character, data: HighscoreList) {
+    await this.prismaService.dailyExperience.create({
+      data: {
+        date: new Date().toISOString().split('T')[0],
+        value: data.value,
+        level: data.level,
+        characterId: character.id,
+      },
+    });
+
+    Logger.log(`Daily experience created for ${character.name}`);
+  }
+
+  @Cron('17 18 * * *')
   async seedPlayersExperience() {
     try {
       const { worlds } = await this.worldsService.getAllWorlds();
@@ -33,77 +51,49 @@ export class SeedPlayersExperienceService {
             currentPage,
             world,
           );
-          highscorePage.forEach(async (character, index) => {
-            await setTimeout(async () => {
-              let nameToFind = character.name;
-              const characterHasSpace = nameToFind.includes(' ');
-              if (characterHasSpace) {
-                nameToFind = nameToFind.replaceAll(' ', '+');
-              }
+          highscorePage.forEach(async (data) => {
+            try {
+              const characterExists =
+                await this.prismaService.character.findFirst({
+                  where: {
+                    name: data.name,
+                  },
+                });
 
-              const { data: characterExists } = await supabase
-                .from('character')
-                .select('*')
-                .ilike('name', `%${character.name}`);
-
-              if (characterExists?.length === 0) {
-                console.warn(
-                  `Character ${character.name} not found in database, trying to add...`,
+              if (!characterExists) {
+                Logger.log(`Character ${data.name} not found. Creating...`);
+                const characterData = await this.prismaService.character.create(
+                  {
+                    data: {
+                      name: data.name,
+                      world: world,
+                      level: data.level,
+                      experience: data.value,
+                      createdAt: new Date(),
+                    },
+                  },
                 );
 
-                const {
-                  data: createdCharacter,
-                  status: createdCharacterStatus,
-                } = await supabase
-                  .from('character')
-                  .insert([
-                    {
-                      name: character.name,
-                    },
-                  ])
-                  .select();
-
-                if (createdCharacterStatus === 201 && createdCharacter) {
-                  console.warn(`Character ${character.name} added to database`);
-                }
-
-                if (createdCharacter) {
-                  await supabase.from('daily_experience').insert([
-                    {
-                      character_id: createdCharacter[0].id,
-                      value: character.value,
-                      date: new Date().toISOString().split('T')[0],
-                      level: character.level,
-                    },
-                  ]);
-                }
-
-                return;
+                await this.createDailyExperience(characterData, data);
               }
 
-              if (characterExists && characterExists.length > 0) {
-                console.warn(`Character ${character.name} already in database`);
-                const { data: dailyExperienceExists } = await supabase
-                  .from('daily_experience')
-                  .select('*')
-                  .eq('character_id', characterExists[0].id)
-                  .eq('date', new Date().toISOString().split('T')[0]);
+              const checkIfCharacterDailyExists =
+                await this.prismaService.dailyExperience.findFirst({
+                  where: {
+                    characterId: characterExists.id,
+                    date: new Date().toISOString().split('T')[0],
+                  },
+                });
 
-                if (
-                  dailyExperienceExists &&
-                  dailyExperienceExists.length === 0
-                ) {
-                  await supabase.from('daily_experience').insert([
-                    {
-                      character_id: characterExists[0].id,
-                      value: character.value,
-                      date: new Date().toISOString().split('T')[0],
-                      level: character.level,
-                    },
-                  ]);
-                }
+              if (!checkIfCharacterDailyExists) {
+                Logger.log(
+                  `Daily experience not found for ${data.name}. Creating...`,
+                );
+                this.createDailyExperience(characterExists, data);
               }
-            }, index * 10000);
+            } catch (error) {
+              console.error(error);
+            }
           });
           currentPage++;
         }
