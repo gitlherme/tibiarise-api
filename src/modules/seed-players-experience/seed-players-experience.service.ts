@@ -39,7 +39,7 @@ export class SeedPlayersExperienceService {
     Logger.log(`Daily experience created for ${character.name}`);
   }
 
-  @Cron('17 18 * * *')
+  @Cron('0 * * * *')
   async seedPlayersExperience() {
     try {
       const { worlds } = await this.worldsService.getAllWorlds();
