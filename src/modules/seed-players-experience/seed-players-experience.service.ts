@@ -39,64 +39,66 @@ export class SeedPlayersExperienceService {
     Logger.log(`Daily experience created for ${character.name}`);
   }
 
-  @Cron('0 * * * *')
+  @Cron('0 */3 * * *')
   async seedPlayersExperience() {
     try {
       const { worlds } = await this.worldsService.getAllWorlds();
       const TOTAL_PAGES = 20;
-      worlds.forEach(async (world) => {
-        let currentPage = 1;
-        while (currentPage <= TOTAL_PAGES) {
-          const highscorePage = await this.fetchHighscorePage(
-            currentPage,
-            world,
-          );
-          highscorePage.forEach(async (data) => {
-            try {
-              const characterExists =
-                await this.prismaService.character.findFirst({
-                  where: {
-                    name: data.name,
-                  },
-                });
-
-              if (!characterExists) {
-                Logger.log(`Character ${data.name} not found. Creating...`);
-                const characterData = await this.prismaService.character.create(
-                  {
-                    data: {
+      worlds.map(async (world, index) => {
+        await setTimeout(async () => {
+          let currentPage = 1;
+          while (currentPage <= TOTAL_PAGES) {
+            const highscorePage = await this.fetchHighscorePage(
+              currentPage,
+              world,
+            );
+            highscorePage.map(async (data) => {
+              try {
+                const characterExists =
+                  await this.prismaService.character.findFirst({
+                    where: {
                       name: data.name,
-                      world: world,
-                      level: data.level,
-                      experience: data.value,
-                      createdAt: new Date(),
                     },
-                  },
-                );
+                  });
 
-                await this.createDailyExperience(characterData, data);
+                if (!characterExists) {
+                  Logger.log(`Character ${data.name} not found. Creating...`);
+                  const characterData =
+                    await this.prismaService.character.create({
+                      data: {
+                        name: data.name,
+                        world: world,
+                        level: data.level,
+                        experience: data.value,
+                        createdAt: new Date(),
+                      },
+                    });
+
+                  await this.createDailyExperience(characterData, data);
+                  return;
+                }
+
+                const checkIfCharacterDailyExists =
+                  await this.prismaService.dailyExperience.findFirst({
+                    where: {
+                      characterId: characterExists.id,
+                      date: new Date().toISOString().split('T')[0],
+                    },
+                  });
+
+                if (!checkIfCharacterDailyExists) {
+                  Logger.log(
+                    `Daily experience not found for ${data.name}. Creating...`,
+                  );
+                  this.createDailyExperience(characterExists, data);
+                }
+              } catch (error) {
+                console.error(error);
               }
-
-              const checkIfCharacterDailyExists =
-                await this.prismaService.dailyExperience.findFirst({
-                  where: {
-                    characterId: characterExists.id,
-                    date: new Date().toISOString().split('T')[0],
-                  },
-                });
-
-              if (!checkIfCharacterDailyExists) {
-                Logger.log(
-                  `Daily experience not found for ${data.name}. Creating...`,
-                );
-                this.createDailyExperience(characterExists, data);
-              }
-            } catch (error) {
-              console.error(error);
-            }
-          });
-          currentPage++;
-        }
+            });
+            currentPage++;
+          }
+        }, index * 10000);
       });
     } catch (error) {
       console.error(error);
