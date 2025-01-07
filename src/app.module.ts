@@ -3,6 +3,7 @@ import { SeedPlayersExperienceModule } from './modules/seed-players-experience/s
 import { ConfigModule } from '@nestjs/config';
 import { WorldsModule } from './modules/worlds/worlds.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { CharacterModule } from './modules/character/character.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ScheduleModule.forRoot(),
     SeedPlayersExperienceModule,
     WorldsModule,
+    CharacterModule,
   ],
   controllers: [],
   providers: [],
