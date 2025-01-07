@@ -20,7 +20,7 @@ datasource db {
 
 model Character {
   id              String            @id @default(uuid())
-  name            String
+  name            String            @unique
   world           String
   level           Int
   experience      BigInt
@@ -35,7 +35,7 @@ model DailyExperience {
   level       Int
   date        String
   character   Character @relation(fields: [characterId], references: [id])
-  characterId String
+  characterId String    @unique
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }

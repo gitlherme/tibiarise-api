@@ -6,9 +6,21 @@ export class CharacterDataMapper {
     character: TibiaDataCharacter,
     experienceTable: DailyExperience[],
   ) {
-    const experienceTableOutput = experienceTable.map((day) => {
+    const experienceTableOutput = experienceTable.map((day, index) => {
+      if (index !== 0 && experienceTable[index - 1].value! !== day.value!) {
+        return {
+          experience:
+            Number(day.value.toString()) -
+            Number(experienceTable[index - 1].value!.toString()),
+          totalExperience: Number(day.value.toString()),
+          date: day.date,
+          level: day.level,
+        };
+      }
+
       return {
-        value: day.value.toString(),
+        experience: 0,
+        totalExperience: Number(day.value.toString()),
         date: day.date,
         level: day.level,
       };

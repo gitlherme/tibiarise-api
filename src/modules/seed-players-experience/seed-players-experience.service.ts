@@ -27,12 +27,21 @@ export class SeedPlayersExperienceService {
   }
 
   async createDailyExperience(character: Character, data: HighscoreList) {
-    await this.prismaService.dailyExperience.create({
-      data: {
+    await this.prismaService.dailyExperience.upsert({
+      where: {
+        characterId: character.id,
+        date: new Date().toISOString().split('T')[0],
+      },
+      create: {
+        characterId: character.id,
         date: new Date().toISOString().split('T')[0],
         value: data.value,
         level: data.level,
-        characterId: character.id,
+        createdAt: new Date(),
+      },
+      update: {
+        value: data.value,
+        level: data.level,
       },
     });
 
@@ -98,7 +107,7 @@ export class SeedPlayersExperienceService {
             });
             currentPage++;
           }
-        }, index * 10000);
+        }, index * 50000);
       });
     } catch (error) {
       console.error(error);
