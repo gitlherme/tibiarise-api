@@ -27,19 +27,10 @@ export class SeedPlayersExperienceService {
   }
 
   async createDailyExperience(character: Character, data: HighscoreList) {
-    await this.prismaService.dailyExperience.upsert({
-      where: {
+    await this.prismaService.dailyExperience.create({
+      data: {
         characterId: character.id,
         date: new Date().toISOString().split('T')[0],
-      },
-      create: {
-        characterId: character.id,
-        date: new Date().toISOString().split('T')[0],
-        value: data.value,
-        level: data.level,
-        createdAt: new Date(),
-      },
-      update: {
         value: data.value,
         level: data.level,
       },
