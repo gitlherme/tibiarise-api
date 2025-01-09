@@ -35,7 +35,7 @@ model DailyExperience {
   level       Int
   date        String
   character   Character @relation(fields: [characterId], references: [id])
-  characterId String    @unique
+  characterId String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
