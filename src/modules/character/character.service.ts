@@ -37,6 +37,9 @@ export class CharacterService {
           where: {
             characterId: character.id,
           },
+          orderBy: {
+            date: 'asc',
+          },
         });
 
       if (!characterDailyExperienceTable) {
