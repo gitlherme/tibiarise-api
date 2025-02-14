@@ -5,6 +5,7 @@ import { WorldsModule } from './modules/worlds/worlds.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CharacterModule } from './modules/character/character.module';
 import { DeleteOldExperiencesModule } from './modules/delete-old-experiences/delete-old-experiences.module';
+import { ExperienceByWorldModule } from './modules/experience-by-world/experience-by-world.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { DeleteOldExperiencesModule } from './modules/delete-old-experiences/del
     WorldsModule,
     CharacterModule,
     DeleteOldExperiencesModule,
+    ExperienceByWorldModule,
   ],
   controllers: [],
   providers: [],
