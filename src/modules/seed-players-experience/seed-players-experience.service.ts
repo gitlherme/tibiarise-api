@@ -6,12 +6,15 @@ import {
   HighscoreList,
   Highscores,
 } from './entities/seed-players-experience.entity';
-import { Cron } from '@nestjs/schedule';
 import { PrismaService } from 'src/prisma.service';
-import { Character } from '@prisma/client';
+import { chunk } from 'lodash';
 
 @Injectable()
 export class SeedPlayersExperienceService {
+  private readonly BATCH_SIZE = 100;
+  private readonly TOTAL_PAGES = 20;
+  private readonly CONCURRENT_WORLDS = 3;
+
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -19,89 +22,132 @@ export class SeedPlayersExperienceService {
     private readonly prismaService: PrismaService,
   ) {}
 
-  async fetchHighscorePage(page: number, world: string) {
-    const { data } = await this.httpService.axiosRef.get<Highscores>(
-      `${this.configService.get<string>('TIBIA_DATA_API_URL')}/highscores/${world}/experience/all/${page}`,
-    );
-    return data.highscores.highscore_list;
+  private async fetchHighscorePage(
+    page: number,
+    world: string,
+  ): Promise<HighscoreList[]> {
+    try {
+      const { data } = await this.httpService.axiosRef.get<Highscores>(
+        `${this.configService.get<string>('TIBIA_DATA_API_URL')}/highscores/${world}/experience/all/${page}`,
+      );
+      return data.highscores.highscore_list;
+    } catch (error) {
+      Logger.error(
+        `Failed to fetch highscore page ${page} for world ${world}`,
+        error,
+      );
+      return [];
+    }
   }
 
-  async createDailyExperience(character: Character, data: HighscoreList) {
-    await this.prismaService.dailyExperience.create({
-      data: {
-        characterId: character.id,
-        date: new Date().toISOString().split('T')[0],
-        value: data.value,
-        level: data.level,
-      },
-    });
+  private async processWorld(world: string): Promise<void> {
+    try {
+      // Fetch all pages for this world
+      const allHighscores: HighscoreList[] = [];
+      await Promise.all(
+        Array.from({ length: this.TOTAL_PAGES }, async (_, i) => {
+          const page = await this.fetchHighscorePage(i + 1, world);
+          allHighscores.push(...page);
+        }),
+      );
 
-    Logger.log(`Daily experience created for ${character.name}`);
+      // Get all existing characters for this world
+      const existingCharacters = await this.prismaService.character.findMany({
+        where: { world },
+        select: { id: true, name: true },
+      });
+      const existingCharacterNames = new Set(
+        existingCharacters.map((c) => c.name),
+      );
+
+      // Get existing daily experiences for today
+      const today = new Date().toISOString().split('T')[0];
+      const existingDailies = await this.prismaService.dailyExperience.findMany(
+        {
+          where: {
+            date: today,
+            character: { world },
+          },
+          select: { characterId: true },
+        },
+      );
+      const existingDailyCharacterIds = new Set(
+        existingDailies.map((d) => d.characterId),
+      );
+
+      // Prepare batch operations
+      const newCharacters = [];
+      const newDailyExperiences = [];
+
+      for (const data of allHighscores) {
+        if (!existingCharacterNames.has(data.name)) {
+          newCharacters.push({
+            name: data.name,
+            world,
+            level: data.level,
+            experience: data.value,
+            createdAt: new Date(),
+          });
+        }
+      }
+
+      // Create new characters in batches
+      const characterChunks = chunk(newCharacters, this.BATCH_SIZE);
+      for (const batch of characterChunks) {
+        await this.prismaService.character.createMany({
+          data: batch,
+          skipDuplicates: true,
+        });
+      }
+
+      // Refresh character list after creating new ones
+      const allCharacters = await this.prismaService.character.findMany({
+        where: { world },
+        select: { id: true, name: true },
+      });
+      const characterMap = new Map(allCharacters.map((c) => [c.name, c.id]));
+
+      // Prepare daily experiences
+      for (const data of allHighscores) {
+        const characterId = characterMap.get(data.name);
+        if (characterId && !existingDailyCharacterIds.has(characterId)) {
+          newDailyExperiences.push({
+            characterId,
+            date: today,
+            value: data.value,
+            level: data.level,
+          });
+        }
+      }
+
+      // Create daily experiences in batches
+      const dailyChunks = chunk(newDailyExperiences, this.BATCH_SIZE);
+      for (const batch of dailyChunks) {
+        await this.prismaService.dailyExperience.createMany({
+          data: batch,
+          skipDuplicates: true,
+        });
+      }
+
+      Logger.log(
+        `Processed world ${world}: ${newCharacters.length} new characters, ${newDailyExperiences.length} new daily experiences`,
+      );
+    } catch (error) {
+      Logger.error(`Failed to process world ${world}: ${error.message}`);
+    }
   }
 
-  @Cron('0 */12 * * *')
+  // @Cron('0 */12 * * *')
   async seedPlayersExperience() {
     try {
       const { worlds } = await this.worldsService.getAllWorlds();
-      const TOTAL_PAGES = 20;
-      worlds.map(async (world, index) => {
-        await setTimeout(async () => {
-          let currentPage = 1;
-          while (currentPage <= TOTAL_PAGES) {
-            const highscorePage = await this.fetchHighscorePage(
-              currentPage,
-              world,
-            );
-            highscorePage.map(async (data) => {
-              try {
-                const characterExists =
-                  await this.prismaService.character.findFirst({
-                    where: {
-                      name: data.name,
-                    },
-                  });
+      const worldChunks = chunk(worlds, this.CONCURRENT_WORLDS);
 
-                if (!characterExists) {
-                  Logger.log(`Character ${data.name} not found. Creating...`);
-                  const characterData =
-                    await this.prismaService.character.create({
-                      data: {
-                        name: data.name,
-                        world: world,
-                        level: data.level,
-                        experience: data.value,
-                        createdAt: new Date(),
-                      },
-                    });
-
-                  await this.createDailyExperience(characterData, data);
-                  return;
-                }
-
-                const checkIfCharacterDailyExists =
-                  await this.prismaService.dailyExperience.findFirst({
-                    where: {
-                      characterId: characterExists.id,
-                      date: new Date().toISOString().split('T')[0],
-                    },
-                  });
-
-                if (!checkIfCharacterDailyExists) {
-                  Logger.log(
-                    `Daily experience not found for ${data.name}. Creating...`,
-                  );
-                  this.createDailyExperience(characterExists, data);
-                }
-              } catch (error) {
-                console.error(error);
-              }
-            });
-            currentPage++;
-          }
-        }, index * 50000);
-      });
+      for (const worldBatch of worldChunks) {
+        await Promise.all(worldBatch.map((world) => this.processWorld(world)));
+      }
     } catch (error) {
-      console.error(error);
+      Logger.error('Failed to seed players experience:', error);
     }
   }
 }

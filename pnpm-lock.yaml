@@ -47,6 +47,9 @@ importers:
       axios:
         specifier: ^1.7.9
         version: 1.7.9
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
       pg:
         specifier: ^8.13.1
         version: 8.13.1
@@ -72,6 +75,9 @@ importers:
       '@types/jest':
         specifier: ^29.5.2
         version: 29.5.14
+      '@types/lodash':
+        specifier: ^4.17.15
+        version: 4.17.15
       '@types/node':
         specifier: ^20.3.1
         version: 20.17.10
@@ -772,6 +778,9 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
+
+  '@types/lodash@4.17.15':
+    resolution: {integrity: sha512-w/P33JFeySuhN6JLkysYUK2gEmy9kHHFN7E8ro0tkfmlDOgxBDzWEZ/J8cWA+fHqFevpswDTFZnDx+R9lbL6xw==}
 
   '@types/luxon@3.4.2':
     resolution: {integrity: sha512-TifLZlFudklWlMBfhubvgqTXRzLDI5pCbGa4P8a3wPyUQSW+1xQ5eDsreP9DWHX3tjq1ke96uYG/nwundroWcA==}
@@ -3937,6 +3946,8 @@ snapshots:
       pretty-format: 29.7.0
 
   '@types/json-schema@7.0.15': {}
+
+  '@types/lodash@4.17.15': {}
 
   '@types/luxon@3.4.2': {}
 
