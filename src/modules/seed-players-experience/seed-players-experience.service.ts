@@ -8,6 +8,7 @@ import {
 } from './entities/seed-players-experience.entity';
 import { PrismaService } from 'src/prisma.service';
 import { chunk } from 'lodash';
+import { Cron } from '@nestjs/schedule';
 
 @Injectable()
 export class SeedPlayersExperienceService {
@@ -137,7 +138,7 @@ export class SeedPlayersExperienceService {
     }
   }
 
-  // @Cron('0 */12 * * *')
+  @Cron('0 */12 * * *')
   async seedPlayersExperience() {
     try {
       const { worlds } = await this.worldsService.getAllWorlds();
