@@ -38,7 +38,7 @@ export class CharacterDataMapper {
           rank: character.character.guild.rank,
         },
       },
-      experienceTable: experienceTableOutput,
+      experienceTable: experienceTableOutput.reverse(),
     };
   }
 }
