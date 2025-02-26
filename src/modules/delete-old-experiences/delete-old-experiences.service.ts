@@ -11,13 +11,16 @@ export class DeleteOldExperiencesService {
   async execute() {
     try {
       Logger.log('Deleting old experiences...');
+
+      // Thirty days ago
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 32);
+
       const deleted = await this.prismaService.dailyExperience.deleteMany({
         where: {
           date: {
             // Lower than 30 days ago
-            lt: new Date(new Date().setDate(new Date().getDate() - 30))
-              .toISOString()
-              .split('T')[0],
+            lt: thirtyDaysAgo.toISOString().split('T')[0],
           },
         },
       });

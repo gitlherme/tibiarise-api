@@ -6,9 +6,9 @@ import {
   HighscoreList,
   Highscores,
 } from './entities/seed-players-experience.entity';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from 'src/prisma.service';
 import { chunk } from 'lodash';
-import { Cron } from '@nestjs/schedule';
 
 @Injectable()
 export class SeedPlayersExperienceService {
@@ -55,18 +55,37 @@ export class SeedPlayersExperienceService {
       // Get all existing characters for this world
       const existingCharacters = await this.prismaService.character.findMany({
         where: { world },
-        select: { id: true, name: true },
+        select: { id: true, name: true, streak: true },
       });
       const existingCharacterNames = new Set(
         existingCharacters.map((c) => c.name),
       );
 
+      // Get yesterday's date
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayString = yesterday.toISOString().split('T')[0];
+      const todayString = today.toISOString().split('T')[0];
+
+      // Get yesterday's experience data for streak calculation
+      const yesterdayExperiences =
+        await this.prismaService.dailyExperience.findMany({
+          where: {
+            date: yesterdayString,
+            character: { world },
+          },
+          select: { characterId: true, value: true },
+        });
+      const yesterdayExpMap = new Map(
+        yesterdayExperiences.map((exp) => [exp.characterId, exp.value]),
+      );
+
       // Get existing daily experiences for today
-      const today = new Date().toISOString().split('T')[0];
       const existingDailies = await this.prismaService.dailyExperience.findMany(
         {
           where: {
-            date: today,
+            date: todayString,
             character: { world },
           },
           select: { characterId: true },
@@ -79,6 +98,7 @@ export class SeedPlayersExperienceService {
       // Prepare batch operations
       const newCharacters = [];
       const newDailyExperiences = [];
+      const characterUpdates = [];
 
       for (const data of allHighscores) {
         if (!existingCharacterNames.has(data.name)) {
@@ -87,6 +107,7 @@ export class SeedPlayersExperienceService {
             world,
             level: data.level,
             experience: data.value,
+            streak: 1, // New characters start with streak 1
             createdAt: new Date(),
           });
         }
@@ -104,21 +125,62 @@ export class SeedPlayersExperienceService {
       // Refresh character list after creating new ones
       const allCharacters = await this.prismaService.character.findMany({
         where: { world },
-        select: { id: true, name: true },
+        select: { id: true, name: true, streak: true },
       });
-      const characterMap = new Map(allCharacters.map((c) => [c.name, c.id]));
+      const characterMap = new Map(
+        allCharacters.map((c) => [c.name, { id: c.id, streak: c.streak }]),
+      );
 
-      // Prepare daily experiences
+      // Prepare daily experiences and streak updates
       for (const data of allHighscores) {
-        const characterId = characterMap.get(data.name);
-        if (characterId && !existingDailyCharacterIds.has(characterId)) {
+        const characterInfo = characterMap.get(data.name);
+        if (!characterInfo) continue;
+
+        const characterId = characterInfo.id;
+        let currentStreak = characterInfo.streak || 0;
+
+        // Check if we need to update the streak
+        if (!existingDailyCharacterIds.has(characterId)) {
+          const yesterdayExp = yesterdayExpMap.get(characterId);
+          const previousDayExpGain = yesterdayExp !== undefined;
+
+          // Update streak in character record
+          if (previousDayExpGain) {
+            currentStreak += 1; // Increment streak if had exp yesterday
+            characterUpdates.push({
+              id: characterId,
+              streak: currentStreak,
+            });
+          } else {
+            // Reset streak if no exp yesterday
+            currentStreak = 1;
+            characterUpdates.push({
+              id: characterId,
+              streak: 1,
+            });
+          }
+
+          // Create daily experience record
           newDailyExperiences.push({
             characterId,
-            date: today,
+            date: todayString,
             value: data.value,
             level: data.level,
           });
         }
+      }
+
+      // Process streak updates in batches
+      const streakUpdateChunks = chunk(characterUpdates, this.BATCH_SIZE);
+      for (const batch of streakUpdateChunks) {
+        await Promise.all(
+          batch.map((update) =>
+            this.prismaService.character.update({
+              where: { id: update.id },
+              data: { streak: update.streak },
+            }),
+          ),
+        );
       }
 
       // Create daily experiences in batches
@@ -131,7 +193,7 @@ export class SeedPlayersExperienceService {
       }
 
       Logger.log(
-        `Processed world ${world}: ${newCharacters.length} new characters, ${newDailyExperiences.length} new daily experiences`,
+        `Processed world ${world}: ${newCharacters.length} new characters, ${newDailyExperiences.length} new daily experiences, ${characterUpdates.length} streak updates`,
       );
     } catch (error) {
       Logger.error(`Failed to process world ${world}: ${error.message}`);
