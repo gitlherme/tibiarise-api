@@ -200,7 +200,7 @@ export class SeedPlayersExperienceService {
     }
   }
 
-  @Cron('0 */12 * * *')
+  @Cron('0 */6 * * *')
   async seedPlayersExperience() {
     try {
       const { worlds } = await this.worldsService.getAllWorlds();
