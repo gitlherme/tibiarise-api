@@ -88,8 +88,14 @@ export class SeedPlayersExperienceService {
             date: todayString,
             character: { world },
           },
-          select: { characterId: true },
+          select: { characterId: true, value: true, level: true },
         },
+      );
+      const existingDailyMap = new Map(
+        existingDailies.map((d) => [
+          d.characterId,
+          { value: d.value, level: d.level },
+        ]),
       );
       const existingDailyCharacterIds = new Set(
         existingDailies.map((d) => d.characterId),
@@ -98,6 +104,7 @@ export class SeedPlayersExperienceService {
       // Prepare batch operations
       const newCharacters = [];
       const newDailyExperiences = [];
+      const updateDailyExperiences = [];
       const characterUpdates = [];
 
       for (const data of allHighscores) {
@@ -139,8 +146,8 @@ export class SeedPlayersExperienceService {
         const characterId = characterInfo.id;
         let currentStreak = characterInfo.streak || 0;
 
-        // Check if we need to update the streak
         if (!existingDailyCharacterIds.has(characterId)) {
+          // CASO 1: Não existe registro de hoje - criar novo
           const yesterdayExp = yesterdayExpMap.get(characterId);
           const previousDayExpGain = yesterdayExp !== undefined;
 
@@ -167,6 +174,19 @@ export class SeedPlayersExperienceService {
             value: data.value,
             level: data.level,
           });
+        } else {
+          // CASO 2: Existe registro de hoje - verificar se a XP aumentou
+          const existingDaily = existingDailyMap.get(characterId);
+
+          if (existingDaily && data.value > existingDaily.value) {
+            // A XP aumentou, vamos atualizar o registro
+            updateDailyExperiences.push({
+              characterId,
+              oldValue: existingDaily.value,
+              newValue: data.value,
+              level: data.level,
+            });
+          }
         }
       }
 
@@ -192,8 +212,22 @@ export class SeedPlayersExperienceService {
         });
       }
 
+      // Update daily experiences where XP increased
+      for (const update of updateDailyExperiences) {
+        await this.prismaService.dailyExperience.updateMany({
+          where: {
+            characterId: update.characterId,
+            date: todayString,
+          },
+          data: {
+            value: update.newValue,
+            level: update.level,
+          },
+        });
+      }
+
       Logger.log(
-        `Processed world ${world}: ${newCharacters.length} new characters, ${newDailyExperiences.length} new daily experiences, ${characterUpdates.length} streak updates`,
+        `Processed world ${world}: ${newCharacters.length} new characters, ${newDailyExperiences.length} new daily experiences, ${updateDailyExperiences.length} updated experiences, ${characterUpdates.length} streak updates`,
       );
     } catch (error) {
       Logger.error(`Failed to process world ${world}: ${error.message}`);
