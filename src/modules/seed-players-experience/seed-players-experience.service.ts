@@ -16,8 +16,6 @@ export class SeedPlayersExperienceService implements OnModuleInit {
   private readonly TOTAL_PAGES = 20;
   private readonly CONCURRENT_WORLDS = 3;
 
- 
-
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -28,23 +26,25 @@ export class SeedPlayersExperienceService implements OnModuleInit {
 
   onModuleInit() {
     const cronTime = this.configService.get('CRON_SEED_PLAYERS_CONFIG');
-    
+
     // Configurar manualmente a função cron
     const callback = () => {
       this.seedPlayersExperience();
     };
-    
+
     // Adicionar o job ao scheduler
     try {
       // Importe o CronJob da versão correta
       const { CronJob } = require('cron');
-      
+
       const job = new CronJob(cronTime, callback);
       this.schedulerRegistry.addCronJob('seedPlayersExperience', job);
       job.start();
-      
+
       Logger.log(`Scheduled seedPlayersExperience job with cron: ${cronTime}`);
-      Logger.log(this.schedulerRegistry.getCronJob('seedPlayersExperience').nextDate());
+      Logger.log(
+        this.schedulerRegistry.getCronJob('seedPlayersExperience').nextDate(),
+      );
     } catch (error) {
       Logger.error(`Failed to schedule cron job: ${error.message}`);
     }
