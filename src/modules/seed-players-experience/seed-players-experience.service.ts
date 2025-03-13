@@ -35,6 +35,7 @@ export class SeedPlayersExperienceService implements OnModuleInit {
     // Adicionar o job ao scheduler
     try {
       // Importe o CronJob da versão correta
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { CronJob } = require('cron');
 
       const job = new CronJob(cronTime, callback);
