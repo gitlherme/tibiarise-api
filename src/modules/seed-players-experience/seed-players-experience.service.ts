@@ -92,8 +92,8 @@ export class SeedPlayersExperienceService implements OnModuleInit {
       const today = new Date();
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayString = yesterday.toISOString().split('T')[0];
-      const todayString = today.toISOString().split('T')[0];
+      const yesterdayString = yesterday.toISOString();
+      const todayString = today.toISOString();
 
       // Get yesterday's experience data for streak calculation
       const yesterdayExperiences =
