@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { WorldsService } from '../worlds/worlds.service';
@@ -6,22 +6,49 @@ import {
   HighscoreList,
   Highscores,
 } from './entities/seed-players-experience.entity';
-import { Cron } from '@nestjs/schedule';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { PrismaService } from 'src/prisma.service';
 import { chunk } from 'lodash';
 
 @Injectable()
-export class SeedPlayersExperienceService {
+export class SeedPlayersExperienceService implements OnModuleInit {
   private readonly BATCH_SIZE = 100;
   private readonly TOTAL_PAGES = 20;
   private readonly CONCURRENT_WORLDS = 3;
+
+ 
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly worldsService: WorldsService,
     private readonly prismaService: PrismaService,
+    private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
+
+  onModuleInit() {
+    const cronTime = this.configService.get('CRON_SEED_PLAYERS_CONFIG');
+    
+    // Configurar manualmente a função cron
+    const callback = () => {
+      this.seedPlayersExperience();
+    };
+    
+    // Adicionar o job ao scheduler
+    try {
+      // Importe o CronJob da versão correta
+      const { CronJob } = require('cron');
+      
+      const job = new CronJob(cronTime, callback);
+      this.schedulerRegistry.addCronJob('seedPlayersExperience', job);
+      job.start();
+      
+      Logger.log(`Scheduled seedPlayersExperience job with cron: ${cronTime}`);
+      Logger.log(this.schedulerRegistry.getCronJob('seedPlayersExperience').nextDate());
+    } catch (error) {
+      Logger.error(`Failed to schedule cron job: ${error.message}`);
+    }
+  }
 
   private async fetchHighscorePage(
     page: number,
@@ -234,7 +261,6 @@ export class SeedPlayersExperienceService {
     }
   }
 
-  @Cron('0 */6 * * *')
   async seedPlayersExperience() {
     try {
       const { worlds } = await this.worldsService.getAllWorlds();
