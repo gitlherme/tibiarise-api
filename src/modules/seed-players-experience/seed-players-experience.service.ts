@@ -69,6 +69,16 @@ export class SeedPlayersExperienceService implements OnModuleInit {
     }
   }
 
+  // Função auxiliar para obter apenas a parte da data (sem hora)
+  private getDateOnly(date: Date): string {
+    return date.toISOString().split('T')[0];
+  }
+
+  // Função auxiliar para comparar se duas datas são do mesmo dia
+  private isSameDay(date1: string, date2: string): boolean {
+    return date1.split('T')[0] === date2.split('T')[0];
+  }
+
   private async processWorld(world: string): Promise<void> {
     try {
       // Fetch all pages for this world
@@ -80,6 +90,11 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         }),
       );
 
+      // Remover possíveis duplicatas na lista de highscores
+      const uniqueHighscores = Array.from(
+        new Map(allHighscores.map((item) => [item.name, item])).values(),
+      );
+
       // Get all existing characters for this world
       const existingCharacters = await this.prismaService.character.findMany({
         where: { world },
@@ -89,44 +104,58 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         existingCharacters.map((c) => c.name),
       );
 
-      // Get yesterday's date
+      // Get yesterday's date and today's date with full timestamp
+      const now = new Date();
       const today = new Date();
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayString = yesterday.toISOString();
-      const todayString = today.toISOString();
+
+      // Get the date parts for comparison
+      const yesterdayDateOnly = this.getDateOnly(yesterday);
+      const todayDateOnly = this.getDateOnly(today);
+      const currentTimestamp = now.toISOString(); // Timestamp completo para registros
 
       // Get yesterday's experience data for streak calculation
       const yesterdayExperiences =
         await this.prismaService.dailyExperience.findMany({
           where: {
-            date: yesterdayString,
             character: { world },
           },
-          select: { characterId: true, value: true },
+          select: { characterId: true, value: true, date: true },
         });
+
+      // Filtrar experiências de ontem usando a função isSameDay
+      const yesterdayFilteredExperiences = yesterdayExperiences.filter((exp) =>
+        this.isSameDay(exp.date, yesterdayDateOnly),
+      );
+
       const yesterdayExpMap = new Map(
-        yesterdayExperiences.map((exp) => [exp.characterId, exp.value]),
+        yesterdayFilteredExperiences.map((exp) => [exp.characterId, exp.value]),
       );
 
       // Get existing daily experiences for today
       const existingDailies = await this.prismaService.dailyExperience.findMany(
         {
           where: {
-            date: todayString,
             character: { world },
           },
-          select: { characterId: true, value: true, level: true },
+          select: { characterId: true, value: true, level: true, date: true },
         },
       );
+
+      // Filtrar experiências de hoje usando a função isSameDay
+      const todayFilteredDailies = existingDailies.filter((daily) =>
+        this.isSameDay(daily.date, todayDateOnly),
+      );
+
       const existingDailyMap = new Map(
-        existingDailies.map((d) => [
+        todayFilteredDailies.map((d) => [
           d.characterId,
-          { value: d.value, level: d.level },
+          { value: d.value, level: d.level, date: d.date },
         ]),
       );
       const existingDailyCharacterIds = new Set(
-        existingDailies.map((d) => d.characterId),
+        todayFilteredDailies.map((d) => d.characterId),
       );
 
       // Prepare batch operations
@@ -135,7 +164,8 @@ export class SeedPlayersExperienceService implements OnModuleInit {
       const updateDailyExperiences = [];
       const characterUpdates = [];
 
-      for (const data of allHighscores) {
+      // Criar novos personagens
+      for (const data of uniqueHighscores) {
         if (!existingCharacterNames.has(data.name)) {
           newCharacters.push({
             name: data.name,
@@ -167,13 +197,14 @@ export class SeedPlayersExperienceService implements OnModuleInit {
       );
 
       // Prepare daily experiences and streak updates
-      for (const data of allHighscores) {
+      for (const data of uniqueHighscores) {
         const characterInfo = characterMap.get(data.name);
         if (!characterInfo) continue;
 
         const characterId = characterInfo.id;
         let currentStreak = characterInfo.streak || 0;
 
+        // Verificar se já existe um registro para este personagem hoje
         if (!existingDailyCharacterIds.has(characterId)) {
           // CASO 1: Não existe registro de hoje - criar novo
           const yesterdayExp = yesterdayExpMap.get(characterId);
@@ -195,10 +226,10 @@ export class SeedPlayersExperienceService implements OnModuleInit {
             });
           }
 
-          // Create daily experience record
+          // Create daily experience record com timestamp completo
           newDailyExperiences.push({
             characterId,
-            date: todayString,
+            date: currentTimestamp, // Usar o timestamp completo
             value: data.value,
             level: data.level,
           });
@@ -213,6 +244,7 @@ export class SeedPlayersExperienceService implements OnModuleInit {
               oldValue: existingDaily.value,
               newValue: data.value,
               level: data.level,
+              oldDate: existingDaily.date,
             });
           }
         }
@@ -245,11 +277,13 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         await this.prismaService.dailyExperience.updateMany({
           where: {
             characterId: update.characterId,
-            date: todayString,
+            date: update.oldDate, // Usar a data exata do registro antigo
+            value: update.oldValue, // Garantir que só atualizamos se o valor ainda for o mesmo que detectamos
           },
           data: {
             value: update.newValue,
             level: update.level,
+            date: currentTimestamp, // Atualizar com o timestamp atual
           },
         });
       }
