@@ -5,10 +5,12 @@ async function bootstrap() {
   BigInt.prototype['toJSON'] = function () {
     return this.toString();
   };
+
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    origin: ['https://tibiarise.app', 'http://localhost:3000'],
+    origin: process.env.ALLOWED_ORIGIN,
   });
   await app.listen(process.env.PORT ?? 3000);
 }
+
 bootstrap();

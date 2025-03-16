@@ -14,7 +14,7 @@ import { chunk } from 'lodash';
 export class SeedPlayersExperienceService implements OnModuleInit {
   private readonly BATCH_SIZE = 100;
   private readonly TOTAL_PAGES = 20;
-  private readonly CONCURRENT_WORLDS = 3;
+  private readonly CONCURRENT_WORLDS = 5; // Aumentado para melhor performance
 
   constructor(
     private readonly httpService: HttpService,
@@ -34,7 +34,6 @@ export class SeedPlayersExperienceService implements OnModuleInit {
 
     // Adicionar o job ao scheduler
     try {
-      // Importe o CronJob da versão correta
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { CronJob } = require('cron');
 
@@ -58,6 +57,7 @@ export class SeedPlayersExperienceService implements OnModuleInit {
     try {
       const { data } = await this.httpService.axiosRef.get<Highscores>(
         `${this.configService.get<string>('TIBIA_DATA_API_URL')}/highscores/${world}/experience/all/${page}`,
+        { timeout: 10000 }, // Adicionado timeout para evitar promessas pendentes
       );
       return data.highscores.highscore_list;
     } catch (error) {
@@ -74,236 +74,250 @@ export class SeedPlayersExperienceService implements OnModuleInit {
     return date.toISOString().split('T')[0];
   }
 
-  // Função auxiliar para comparar se duas datas são do mesmo dia
-  private isSameDay(date1: string, date2: string): boolean {
-    return date1.split('T')[0] === date2.split('T')[0];
-  }
-
   private async processWorld(world: string): Promise<void> {
+    const startTime = Date.now();
     try {
-      // Fetch all pages for this world
-      const allHighscores: HighscoreList[] = [];
-      await Promise.all(
-        Array.from({ length: this.TOTAL_PAGES }, async (_, i) => {
-          const page = await this.fetchHighscorePage(i + 1, world);
-          allHighscores.push(...page);
-        }),
+      Logger.log(`Starting to process world: ${world}`);
+
+      // Fetch all pages for this world with better concurrency
+      const fetchPromises = Array.from({ length: this.TOTAL_PAGES }, (_, i) =>
+        this.fetchHighscorePage(i + 1, world),
       );
 
-      // Remover possíveis duplicatas na lista de highscores
+      // Use Promise.allSettled para garantir que uma falha não impeça o processamento dos outros
+      const results = await Promise.allSettled(fetchPromises);
+      const allHighscores: HighscoreList[] = [];
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          allHighscores.push(...result.value);
+        } else {
+          Logger.warn(
+            `Failed to fetch page ${index + 1} for world ${world}: ${result.reason}`,
+          );
+        }
+      });
+
+      if (allHighscores.length === 0) {
+        Logger.warn(`No highscores data found for world ${world}`);
+        return;
+      }
+
+      // Remover duplicatas com melhor performance usando Map
       const uniqueHighscores = Array.from(
         new Map(allHighscores.map((item) => [item.name, item])).values(),
       );
 
-      // Get all existing characters for this world
-      const existingCharacters = await this.prismaService.character.findMany({
-        where: { world },
-        select: { id: true, name: true, streak: true },
-      });
-      const existingCharacterNames = new Set(
-        existingCharacters.map((c) => c.name),
-      );
-
-      // Get yesterday's date and today's date with full timestamp
-      const now = new Date();
+      // Pegar a data atual (apenas a parte da data, sem hora)
       const today = new Date();
+      const todayDateOnly = this.getDateOnly(today);
+
+      // Determinar a data de ontem
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-
-      // Get the date parts for comparison
       const yesterdayDateOnly = this.getDateOnly(yesterday);
-      const todayDateOnly = this.getDateOnly(today);
-      const currentTimestamp = now.toISOString(); // Timestamp completo para registros
 
-      // Get yesterday's experience data for streak calculation
+      // Verificar se já processamos este mundo hoje
+      const todayRecordsCount = await this.prismaService.dailyExperience.count({
+        where: {
+          character: { world },
+          date: { startsWith: todayDateOnly },
+        },
+      });
+
+      if (todayRecordsCount > 0) {
+        Logger.log(`World ${world} already processed today, skipping`);
+        return;
+      }
+
+      // Buscar todos os personagens existentes
+      const existingCharacters = await this.prismaService.character.findMany({
+        where: { world },
+        select: { id: true, name: true, streak: true, experience: true },
+      });
+
+      // Criar mapas para acesso rápido
+      const characterByName = new Map(
+        existingCharacters.map((c) => [c.name, c]),
+      );
+
+      // Buscar experiências de ontem para cálculo de streak
       const yesterdayExperiences =
         await this.prismaService.dailyExperience.findMany({
           where: {
             character: { world },
+            date: { startsWith: yesterdayDateOnly },
           },
-          select: { characterId: true, value: true, date: true },
+          select: { characterId: true, value: true },
         });
 
-      // Filtrar experiências de ontem usando a função isSameDay
-      const yesterdayFilteredExperiences = yesterdayExperiences.filter((exp) =>
-        this.isSameDay(exp.date, yesterdayDateOnly),
-      );
-
       const yesterdayExpMap = new Map(
-        yesterdayFilteredExperiences.map((exp) => [exp.characterId, exp.value]),
+        yesterdayExperiences.map((exp) => [exp.characterId, exp.value]),
       );
 
-      // Get existing daily experiences for today
-      const existingDailies = await this.prismaService.dailyExperience.findMany(
-        {
-          where: {
-            character: { world },
-          },
-          select: { characterId: true, value: true, level: true, date: true },
-        },
-      );
-
-      // Filtrar experiências de hoje usando a função isSameDay
-      const todayFilteredDailies = existingDailies.filter((daily) =>
-        this.isSameDay(daily.date, todayDateOnly),
-      );
-
-      const existingDailyMap = new Map(
-        todayFilteredDailies.map((d) => [
-          d.characterId,
-          { value: d.value, level: d.level, date: d.date },
-        ]),
-      );
-      const existingDailyCharacterIds = new Set(
-        todayFilteredDailies.map((d) => d.characterId),
-      );
-
-      // Prepare batch operations
+      // Preparar operações em lote
       const newCharacters = [];
       const newDailyExperiences = [];
-      const updateDailyExperiences = [];
       const characterUpdates = [];
 
-      // Criar novos personagens
+      // Timestamp para registros
+      const currentTimestamp = new Date().toISOString();
+
+      // Processar os personagens
       for (const data of uniqueHighscores) {
-        if (!existingCharacterNames.has(data.name)) {
-          newCharacters.push({
+        const existingChar = characterByName.get(data.name);
+
+        if (!existingChar) {
+          // É um personagem novo
+          const newChar = {
             name: data.name,
             world,
             level: data.level,
             experience: data.value,
-            streak: 1, // New characters start with streak 1
+            streak: 1, // Novo personagem começa com streak 1
             createdAt: new Date(),
-          });
-        }
-      }
+          };
+          newCharacters.push(newChar);
+        } else {
+          // É um personagem existente
+          const characterId = existingChar.id;
+          let currentStreak = existingChar.streak || 0;
+          let shouldUpdateStreak = false;
 
-      // Create new characters in batches
-      const characterChunks = chunk(newCharacters, this.BATCH_SIZE);
-      for (const batch of characterChunks) {
-        await this.prismaService.character.createMany({
-          data: batch,
-          skipDuplicates: true,
-        });
-      }
-
-      // Refresh character list after creating new ones
-      const allCharacters = await this.prismaService.character.findMany({
-        where: { world },
-        select: { id: true, name: true, streak: true },
-      });
-      const characterMap = new Map(
-        allCharacters.map((c) => [c.name, { id: c.id, streak: c.streak }]),
-      );
-
-      // Prepare daily experiences and streak updates
-      for (const data of uniqueHighscores) {
-        const characterInfo = characterMap.get(data.name);
-        if (!characterInfo) continue;
-
-        const characterId = characterInfo.id;
-        let currentStreak = characterInfo.streak || 0;
-
-        // Verificar se já existe um registro para este personagem hoje
-        if (!existingDailyCharacterIds.has(characterId)) {
-          // CASO 1: Não existe registro de hoje - criar novo
+          // Verificar se teve ganho de XP ontem para o cálculo do streak
           const yesterdayExp = yesterdayExpMap.get(characterId);
-          const previousDayExpGain = yesterdayExp !== undefined;
+          const hadExpYesterday = yesterdayExp !== undefined;
 
-          // Update streak in character record
-          if (previousDayExpGain) {
-            currentStreak += 1; // Increment streak if had exp yesterday
-            characterUpdates.push({
-              id: characterId,
-              streak: currentStreak,
-            });
-          } else {
-            // Reset streak if no exp yesterday
+          // Verificar se experiência aumentou desde o último registro
+          const expIncreased = data.value > existingChar.experience;
+
+          // Atualizar streak
+          if (hadExpYesterday) {
+            currentStreak += 1; // Incrementar streak se teve experiência ontem
+            shouldUpdateStreak = true;
+          } else if (expIncreased) {
+            // Se não teve exp ontem mas tem hoje, resetar para 1
             currentStreak = 1;
+            shouldUpdateStreak = true;
+          }
+
+          // Atualizar caractere somente se necessário
+          if (shouldUpdateStreak || expIncreased) {
             characterUpdates.push({
               id: characterId,
-              streak: 1,
+              updates: {
+                streak: currentStreak,
+                ...(expIncreased && {
+                  experience: data.value,
+                  level: data.level,
+                }),
+              },
             });
           }
 
-          // Create daily experience record com timestamp completo
+          // Sempre criar um novo registro diário
           newDailyExperiences.push({
             characterId,
-            date: currentTimestamp, // Usar o timestamp completo
+            date: currentTimestamp,
             value: data.value,
             level: data.level,
           });
-        } else {
-          // CASO 2: Existe registro de hoje - verificar se a XP aumentou
-          const existingDaily = existingDailyMap.get(characterId);
-
-          if (existingDaily && data.value > existingDaily.value) {
-            // A XP aumentou, vamos atualizar o registro
-            updateDailyExperiences.push({
-              characterId,
-              oldValue: existingDaily.value,
-              newValue: data.value,
-              level: data.level,
-              oldDate: existingDaily.date,
-            });
-          }
         }
       }
 
-      // Process streak updates in batches
-      const streakUpdateChunks = chunk(characterUpdates, this.BATCH_SIZE);
-      for (const batch of streakUpdateChunks) {
+      // Processar em lotes para melhor performance
+
+      // 1. Criar novos personagens
+      if (newCharacters.length > 0) {
+        const characterChunks = chunk(newCharacters, this.BATCH_SIZE);
+        for (const batch of characterChunks) {
+          await this.prismaService.character.createMany({
+            data: batch,
+            skipDuplicates: true,
+          });
+        }
+
+        // Buscar IDs dos novos personagens
+        const newCharacterNames = newCharacters.map((c) => c.name);
+        const createdCharacters = await this.prismaService.character.findMany({
+          where: {
+            name: { in: newCharacterNames },
+            world,
+          },
+          select: { id: true, name: true },
+        });
+
+        // Adicionar registros diários para os novos personagens
+        const newCharacterDailies = createdCharacters.map((c) => ({
+          characterId: c.id,
+          date: currentTimestamp,
+          value:
+            newCharacters.find((nc) => nc.name === c.name)?.experience || 0,
+          level: newCharacters.find((nc) => nc.name === c.name)?.level || 1,
+        }));
+
+        newDailyExperiences.push(...newCharacterDailies);
+      }
+
+      // 2. Atualizar personagens existentes em paralelo
+      if (characterUpdates.length > 0) {
+        const updateChunks = chunk(
+          characterUpdates,
+          Math.min(100, Math.ceil(characterUpdates.length / 10)),
+        );
         await Promise.all(
-          batch.map((update) =>
-            this.prismaService.character.update({
-              where: { id: update.id },
-              data: { streak: update.streak },
-            }),
-          ),
+          updateChunks.map(async (chunk) => {
+            await Promise.all(
+              chunk.map((update) =>
+                this.prismaService.character.update({
+                  where: { id: update.id },
+                  data: update.updates,
+                }),
+              ),
+            );
+          }),
         );
       }
 
-      // Create daily experiences in batches
-      const dailyChunks = chunk(newDailyExperiences, this.BATCH_SIZE);
-      for (const batch of dailyChunks) {
-        await this.prismaService.dailyExperience.createMany({
-          data: batch,
-          skipDuplicates: true,
-        });
+      // 3. Criar registros diários em lotes
+      if (newDailyExperiences.length > 0) {
+        const dailyChunks = chunk(newDailyExperiences, this.BATCH_SIZE);
+        for (const batch of dailyChunks) {
+          await this.prismaService.dailyExperience.createMany({
+            data: batch,
+            skipDuplicates: true,
+          });
+        }
       }
 
-      // Update daily experiences where XP increased
-      for (const update of updateDailyExperiences) {
-        await this.prismaService.dailyExperience.updateMany({
-          where: {
-            characterId: update.characterId,
-            date: update.oldDate, // Usar a data exata do registro antigo
-            value: update.oldValue, // Garantir que só atualizamos se o valor ainda for o mesmo que detectamos
-          },
-          data: {
-            value: update.newValue,
-            level: update.level,
-            date: currentTimestamp, // Atualizar com o timestamp atual
-          },
-        });
-      }
-
+      const executionTime = (Date.now() - startTime) / 1000;
       Logger.log(
-        `Processed world ${world}: ${newCharacters.length} new characters, ${newDailyExperiences.length} new daily experiences, ${updateDailyExperiences.length} updated experiences, ${characterUpdates.length} streak updates`,
+        `Processed world ${world} in ${executionTime.toFixed(2)}s: ${newCharacters.length} new characters, ${newDailyExperiences.length} daily experiences, ${characterUpdates.length} character updates`,
       );
     } catch (error) {
-      Logger.error(`Failed to process world ${world}: ${error.message}`);
+      Logger.error(
+        `Failed to process world ${world}: ${error.message}`,
+        error.stack,
+      );
     }
   }
 
   async seedPlayersExperience() {
     try {
+      Logger.log('Starting seedPlayersExperience job');
+      const startTime = Date.now();
+
       const { worlds } = await this.worldsService.getAllWorlds();
       const worldChunks = chunk(worlds, this.CONCURRENT_WORLDS);
 
       for (const worldBatch of worldChunks) {
         await Promise.all(worldBatch.map((world) => this.processWorld(world)));
       }
+
+      const executionTime = (Date.now() - startTime) / 1000;
+      Logger.log(
+        `SeedPlayersExperience completed in ${executionTime.toFixed(2)}s`,
+      );
     } catch (error) {
       Logger.error('Failed to seed players experience:', error);
     }
