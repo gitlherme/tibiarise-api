@@ -13,6 +13,11 @@ generator client {
 //   url      = "file:./dev.db?connection_limit=1&socket_timeout=10"
 // }
 
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
 datasource db {
   provider = "cockroachdb"
   url      = env("DATABASE_URL")
@@ -27,7 +32,18 @@ model Character {
   streak          Int               @default(1)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
-  DailyExperience DailyExperience[]
+  verified        Boolean?          @default(false)
+  userId          String?
+  dailyExperience DailyExperience[]
+}
+
+model VerifyCharacter {
+  id               String   @id @default(uuid())
+  characterName    String
+  verificationCode String
+  userId           String
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
 }
 
 model DailyExperience {
