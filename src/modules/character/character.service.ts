@@ -23,6 +23,9 @@ export class CharacterService {
             mode: 'insensitive',
           },
         },
+        include: {
+          profitHistory: false,
+        },
       });
 
       if (!character) {
