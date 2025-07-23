@@ -6,6 +6,7 @@ export class CharacterDataMapper {
     character: TibiaDataCharacter,
     experienceTable: DailyExperience[],
     isVerified: boolean = false,
+    verifiedAt: Date | null = null,
   ) {
     const experienceTableOutput = experienceTable.map((day, index) => {
       if (index !== 0 && experienceTable[index - 1].value! !== day.value!) {
@@ -35,6 +36,7 @@ export class CharacterDataMapper {
         vocation: character.character.vocation,
         sex: character.character.sex,
         isVerified,
+        verifiedAt,
         guild: {
           name: character.character.guild.name,
           rank: character.character.guild.rank,

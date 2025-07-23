@@ -15,4 +15,9 @@ export class UserController {
   findOne(@Param('id') id: string) {
     return this.userService.findOne(id);
   }
+
+  @Get(':id/characters')
+  findCharacters(@Param('id') id: string) {
+    return this.userService.findCharacters(id);
+  }
 }

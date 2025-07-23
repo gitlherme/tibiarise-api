@@ -15,4 +15,14 @@ export class UserService {
       where: { id },
     });
   }
+
+  findCharacters(userId: string) {
+    return this.prismaService.character.findMany({
+      where: {
+        user: {
+          email: userId,
+        },
+      },
+    });
+  }
 }

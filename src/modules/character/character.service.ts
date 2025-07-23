@@ -60,6 +60,7 @@ export class CharacterService {
           characterData.character,
           characterDailyExperienceTable,
           isVerified,
+          character.verifiedAt,
         );
       }
 

@@ -54,7 +54,8 @@ export class VerifyCharacterService {
       );
 
     const comment = data.character.character.comment;
-    const commentHasCode = comment.toLowerCase().includes(id);
+    const commentHasCode =
+      comment !== undefined && comment.toLowerCase().includes(id);
 
     if (!commentHasCode) {
       Logger.error(`Comment does not contain verification code: ${comment}`);
@@ -63,17 +64,35 @@ export class VerifyCharacterService {
       );
     }
 
+    const characterExists = await this.prismaService.character.findFirst({
+      where: {
+        name: verification.characterName,
+      },
+    });
+
+    if (!characterExists) {
+      Logger.error(`Character does not exist: ${verification.characterName}`);
+      throw new UnauthorizedException('Character does not exist');
+    }
+
+    const user = await this.prismaService.user.findUnique({
+      where: {
+        email: verification.userId,
+      },
+    });
+
     await this.prismaService.character.update({
       where: {
         name: verification.characterName,
       },
       data: {
         verified: true,
-        userId: verification.userId,
+        verifiedAt: new Date(),
+        userId: user.id,
       },
     });
 
-    await this.remove(id);
+    await this.remove(verification.id);
 
     return { message: 'Verification code accepted. Character verified.' };
   }
