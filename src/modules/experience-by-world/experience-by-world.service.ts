@@ -27,10 +27,10 @@ export class ExperienceByWorldService {
     lastMonth: TimePeriod;
   } {
     const today = new Date();
-    today.setHours(23, 59, 59, 999);
+    today.setHours(0, 0, 0, 0);
 
     const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setDate(yesterday.getDate() - 2);
     yesterday.setHours(0, 0, 0, 0);
 
     const weekAgo = new Date(today);
@@ -70,6 +70,11 @@ export class ExperienceByWorldService {
     limit = 100,
   ): Promise<ExperienceGain[]> {
     // Find characters from the specified world
+    Logger.log(
+      `Calculating experience gains for world: ${world}, from ${startDate} to ${endDate}`,
+      'ExperienceByWorldService',
+    );
+
     const characters = await this.prismaService.character.findMany({
       where: {
         world: {
@@ -107,7 +112,6 @@ export class ExperienceByWorldService {
       distinct: ['characterId'],
     });
 
-    // Get the latest daily experience record within the date range for each character
     const endExperiences = await this.prismaService.dailyExperience.findMany({
       where: {
         characterId: {
@@ -132,7 +136,6 @@ export class ExperienceByWorldService {
     );
     const characterMap = new Map(characters.map((char) => [char.id, char]));
 
-    // Calculate gains for each character
     const gains: ExperienceGain[] = [];
 
     for (const characterId of characterIds) {
@@ -147,19 +150,15 @@ export class ExperienceByWorldService {
 
         if (expGained <= 0) continue; // Skip negative or zero gains
 
-        // Calculate days between dates
         const startDateTime = new Date(startExp.date).getTime();
         const endDateTime = new Date(endExp.date).getTime();
         const daysDiff = (endDateTime - startDateTime) / (1000 * 60 * 60 * 24);
 
-        // Calculate hours (more precise than days)
         const hoursDiff = daysDiff * 24;
 
-        // Calculate exp per hour
         const expPerHour =
           hoursDiff > 0 ? Math.round(expGained / hoursDiff) : expGained;
 
-        // Calculate percentage gain
         const percentageGain =
           (expGained / Number(startExp.value.toString())) * 100;
 
@@ -239,6 +238,10 @@ export class ExperienceByWorldService {
     period: 'daily' | 'weekly' | 'monthly',
     limit = 100,
   ) {
+    Logger.log(
+      `Fetching characters for world: ${world}`,
+      'ExperienceByWorldService',
+    );
     const periods = this.getTimePeriods();
     let timePeriod: TimePeriod;
 
