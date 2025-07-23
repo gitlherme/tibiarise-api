@@ -14,8 +14,14 @@ export class ProfitManagerService {
     private readonly configService: ConfigService,
   ) {}
   async create(createProfitManagerDto: CreateProfitManagerDto) {
-    const { huntDate, profit, preyCardsUsed, boostsValue, characterId } =
-      createProfitManagerDto;
+    const {
+      huntName,
+      huntDate,
+      profit,
+      preyCardsUsed,
+      boostsValue,
+      characterId,
+    } = createProfitManagerDto;
 
     const tibiaCoinValue = await this.getTibiaCoinValue(
       createProfitManagerDto.world,
@@ -33,6 +39,7 @@ export class ProfitManagerService {
 
     return this.prismaService.profitEntry.create({
       data: {
+        huntName,
         huntDate,
         profit,
         preyCardsUsed: preyCardsUsed * Number(tibiaCoinValue),

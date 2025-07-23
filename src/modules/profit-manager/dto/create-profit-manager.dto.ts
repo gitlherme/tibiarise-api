@@ -1,4 +1,5 @@
 export class CreateProfitManagerDto {
+  huntName: string;
   huntDate: Date;
   profit: bigint;
   preyCardsUsed: number;
