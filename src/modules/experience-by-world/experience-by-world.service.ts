@@ -30,7 +30,7 @@ export class ExperienceByWorldService {
     today.setHours(0, 0, 0, 0);
 
     const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 2);
+    yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
 
     const weekAgo = new Date(today);
