@@ -102,12 +102,12 @@ export class ExperienceByWorldService {
         characterId: {
           in: characterIds,
         },
-        date: {
-          gte: startDate.toISOString().split('T')[0],
+        createdAt: {
+          gte: startDate,
         },
       },
       orderBy: {
-        date: 'asc',
+        createdAt: 'asc',
       },
       distinct: ['characterId'],
     });
@@ -117,12 +117,12 @@ export class ExperienceByWorldService {
         characterId: {
           in: characterIds,
         },
-        date: {
-          lte: endDate.toISOString().split('T')[0],
+        createdAt: {
+          lte: endDate,
         },
       },
       orderBy: {
-        date: 'desc',
+        createdAt: 'desc',
       },
       distinct: ['characterId'],
     });
