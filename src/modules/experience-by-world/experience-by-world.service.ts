@@ -29,9 +29,8 @@ export class ExperienceByWorldService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(0, 0, 0, 0);
+    const yesterday = new Date();
+    yesterday.setHours(10, 0, 0, 0);
 
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
