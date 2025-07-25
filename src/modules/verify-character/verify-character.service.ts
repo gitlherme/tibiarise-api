@@ -35,7 +35,6 @@ export class VerifyCharacterService {
   }
 
   async findOne(id: string) {
-    console.log('entrou aqui', id);
     const verification = await this.prismaService.verifyCharacter.findFirst({
       where: {
         verificationCode: id,
@@ -47,7 +46,6 @@ export class VerifyCharacterService {
 
   async update(id: string) {
     const verification = await this.findOne(id);
-    console.log(verification);
     const { data } =
       await this.httpService.axiosRef.get<TibiaDataCharacterEndpoint>(
         `${this.configService.get<string>('TIBIA_DATA_API_URL')}/character/${verification.characterName}`,
@@ -80,6 +78,14 @@ export class VerifyCharacterService {
         email: verification.userId,
       },
     });
+
+    if (!user) {
+      await this.prismaService.user.create({
+        data: {
+          email: verification.userId,
+        },
+      });
+    }
 
     await this.prismaService.character.update({
       where: {
