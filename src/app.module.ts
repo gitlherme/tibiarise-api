@@ -7,6 +7,9 @@ import { CharacterModule } from './modules/character/character.module';
 import { DeleteOldExperiencesModule } from './modules/delete-old-experiences/delete-old-experiences.module';
 import { ExperienceByWorldModule } from './modules/experience-by-world/experience-by-world.module';
 import { HttpModule } from '@nestjs/axios';
+import { VerifyCharacterModule } from './modules/verify-character/verify-character.module';
+import { UserModule } from './modules/user/user.module';
+import { ProfitManagerModule } from './modules/profit-manager/profit-manager.module';
 
 @Module({
   imports: [
@@ -22,6 +25,9 @@ import { HttpModule } from '@nestjs/axios';
     CharacterModule,
     DeleteOldExperiencesModule,
     ExperienceByWorldModule,
+    VerifyCharacterModule,
+    UserModule,
+    ProfitManagerModule,
   ],
   controllers: [],
   providers: [],

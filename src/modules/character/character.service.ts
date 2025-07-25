@@ -23,6 +23,9 @@ export class CharacterService {
             mode: 'insensitive',
           },
         },
+        include: {
+          profitHistory: false,
+        },
       });
 
       if (!character) {
@@ -51,10 +54,13 @@ export class CharacterService {
           `${this.configService.get<string>('TIBIA_DATA_API_URL')}/character/${name}`,
         );
 
+      const isVerified = character.verified;
       if (characterData && characterDailyExperienceTable) {
         return CharacterDataMapper.output(
           characterData.character,
           characterDailyExperienceTable,
+          isVerified,
+          character.verifiedAt,
         );
       }
 

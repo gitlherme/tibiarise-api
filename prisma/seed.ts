@@ -15,7 +15,7 @@ async function main() {
       level: 1000,
       experience: 10000000000,
       world: 'Descubra',
-      DailyExperience: {
+      dailyExperience: {
         create: [
           {
             level: 1000,
