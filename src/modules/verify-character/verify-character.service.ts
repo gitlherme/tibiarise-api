@@ -64,7 +64,10 @@ export class VerifyCharacterService {
 
     const characterExists = await this.prismaService.character.findFirst({
       where: {
-        name: verification.characterName,
+        name: {
+          equals: verification.characterName,
+          mode: 'insensitive',
+        },
       },
     });
 

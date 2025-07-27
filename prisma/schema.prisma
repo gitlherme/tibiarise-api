@@ -47,6 +47,7 @@ model ProfitEntry {
   character      Character @relation(fields: [characterId], references: [id])
   huntName       String    @default("")
   huntDate       DateTime  @default(now())
+  huntDuration   Int?
   profit         BigInt
   preyCardsUsed  Int
   boostsValue    Int

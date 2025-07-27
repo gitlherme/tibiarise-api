@@ -21,6 +21,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "db": "pnpm dlx prisma db",
     "prisma:generate": "pnpm dlx prisma generate",
     "prisma:migrate": "pnpm dlx prisma migrate dev",
     "prisma:migrate:deploy": "pnpm dlx prisma migrate deploy",

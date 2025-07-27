@@ -17,6 +17,7 @@ export class ProfitManagerService {
     const {
       huntName,
       huntDate,
+      huntDuration,
       profit,
       preyCardsUsed,
       boostsValue,
@@ -42,6 +43,7 @@ export class ProfitManagerService {
         huntName,
         huntDate,
         profit,
+        huntDuration,
         preyCardsUsed: preyCardsUsed * Number(tibiaCoinValue),
         boostsValue: boostsValue * Number(tibiaCoinValue),
         tibiaCoinValue,
