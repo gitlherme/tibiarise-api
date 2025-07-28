@@ -44,7 +44,7 @@ export class ProfitManagerService {
         huntDate,
         profit,
         huntDuration,
-        preyCardsUsed: preyCardsUsed * Number(tibiaCoinValue),
+        preyCardsUsed: preyCardsUsed * (Number(tibiaCoinValue) * 10),
         boostsValue: boostsValue * Number(tibiaCoinValue),
         tibiaCoinValue,
         netProfit:
@@ -64,8 +64,6 @@ export class ProfitManagerService {
       await this.httpService.axiosRef.get<Prices>(
         'https://tibiatrade.gg/api/tibiaCoinPrices',
       );
-
-    Logger.log(`Tibia Coin values fetched: ${JSON.stringify(tibiaCoinValues)}`);
 
     const worldPrices = tibiaCoinValues.prices.find(
       (price) => price.world_name.toLowerCase() === world.toLowerCase(),
