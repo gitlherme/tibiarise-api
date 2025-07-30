@@ -56,7 +56,10 @@ export class VerifyCharacterService {
       comment !== undefined && comment.toLowerCase().includes(id);
 
     if (!commentHasCode) {
-      Logger.error(`Comment does not contain verification code: ${comment}`);
+      Logger.error(`Comment does not contain verification code
+        - Current comment: ${comment}
+        - Verification code: ${id}  
+      `);
       throw new UnauthorizedException(
         'Comment does not contain verification code',
       );
@@ -92,7 +95,7 @@ export class VerifyCharacterService {
 
     await this.prismaService.character.update({
       where: {
-        name: verification.characterName,
+        name: characterExists.name,
       },
       data: {
         verified: true,
