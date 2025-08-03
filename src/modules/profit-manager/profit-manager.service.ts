@@ -79,6 +79,9 @@ export class ProfitManagerService {
           id: characterId,
         },
       },
+      orderBy: {
+        huntDate: 'desc',
+      },
     });
   }
 
