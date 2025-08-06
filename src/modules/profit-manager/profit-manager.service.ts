@@ -38,19 +38,18 @@ export class ProfitManagerService {
       );
     }
 
+    const totalPrey = preyCardsUsed * (Number(tibiaCoinValue) * 10);
+    const totalBoosts = boostsValue * Number(tibiaCoinValue);
     return this.prismaService.profitEntry.create({
       data: {
         huntName,
         huntDate,
         profit,
         huntDuration,
-        preyCardsUsed: preyCardsUsed * (Number(tibiaCoinValue) * 10),
-        boostsValue: boostsValue * Number(tibiaCoinValue),
+        preyCardsUsed: totalPrey,
+        boostsValue: totalBoosts,
         tibiaCoinValue,
-        netProfit:
-          Number(profit) -
-          (preyCardsUsed * Number(tibiaCoinValue) +
-            boostsValue * Number(tibiaCoinValue)),
+        netProfit: Number(profit) - (totalPrey + totalBoosts),
         character: {
           connect: { id: characterId },
         },

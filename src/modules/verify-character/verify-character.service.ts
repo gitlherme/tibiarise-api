@@ -2,6 +2,7 @@ import {
   Body,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { CreateVerifyCharacterDto } from './dto/create-verify-character.dto';
@@ -31,6 +32,27 @@ export class VerifyCharacterService {
 
     return {
       code: verification.verificationCode,
+    };
+  }
+
+  async findByCharacterName(characterName: string) {
+    const hasCode = await this.prismaService.verifyCharacter.findFirst({
+      where: {
+        characterName: {
+          equals: characterName,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (!hasCode) {
+      throw new NotFoundException(
+        'Character does not have a verification code',
+      );
+    }
+
+    return {
+      code: hasCode.verificationCode,
     };
   }
 

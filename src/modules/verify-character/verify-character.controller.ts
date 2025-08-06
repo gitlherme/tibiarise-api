@@ -26,6 +26,11 @@ export class VerifyCharacterController {
     return this.verifyCharacterService.findOne(id);
   }
 
+  @Get('/check/:name')
+  findByCharacter(@Param('name') name: string) {
+    return this.verifyCharacterService.findByCharacterName(name);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string) {
     return this.verifyCharacterService.update(id);
