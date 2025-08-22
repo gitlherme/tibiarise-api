@@ -186,7 +186,7 @@ export class SeedPlayersExperienceService implements OnModuleInit {
 
           // Verificar se teve ganho de XP ontem para o cálculo do streak
           const yesterdayExp = yesterdayExpMap.get(characterId);
-          const hadExpYesterday = yesterdayExp !== undefined;
+          const hadExpYesterday = yesterdayExp !== undefined && yesterdayExp > 0;
 
           // Verificar se experiência aumentou desde o último registro
           const expIncreased = data.value > existingChar.experience;
