@@ -39,6 +39,9 @@ export class CharacterService {
         await this.prismaService.dailyExperience.findMany({
           where: {
             characterId: character.id,
+            date: {
+              gte: new Date(new Date().setDate(new Date().getDate() - 31)).toISOString(),
+            }
           },
           orderBy: {
             date: 'asc',
