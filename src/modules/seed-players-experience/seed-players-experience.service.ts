@@ -199,6 +199,9 @@ export class SeedPlayersExperienceService implements OnModuleInit {
             // Se não teve exp ontem mas tem hoje, resetar para 1
             currentStreak = 1;
             shouldUpdateStreak = true;
+          } else {
+            currentStreak = 0;
+            shouldUpdateStreak = true;
           }
 
           // Atualizar caractere somente se necessário
