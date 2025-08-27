@@ -7,6 +7,7 @@ export class CharacterDataMapper {
     experienceTable: DailyExperience[],
     isVerified: boolean = false,
     verifiedAt: Date | null = null,
+    streak: number = 0
   ) {
     const experienceTableOutput = experienceTable.map((day, index) => {
       if (index !== 0) {
@@ -37,6 +38,7 @@ export class CharacterDataMapper {
         world: character.character.world,
         vocation: character.character.vocation,
         sex: character.character.sex,
+        streak,
         isVerified,
         verifiedAt,
         guild: {

@@ -61,6 +61,7 @@ export class CharacterService {
           characterDailyExperienceTable,
           isVerified,
           character.verifiedAt,
+          character.streak,
         );
       }
 
