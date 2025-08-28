@@ -28,7 +28,7 @@ export class ExperienceByWorldService {
     lastMonth: TimePeriod;
   } {
     const today = new Date();
-    today.setHours(10, 0, 0, 0);
+    today.setHours(23, 59, 0, 0);
 
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
