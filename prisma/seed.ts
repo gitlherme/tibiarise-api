@@ -13,6 +13,7 @@ async function main() {
     create: {
       name: 'Gui',
       level: 1000,
+      vocation: 'Master Sorcerer',
       experience: 10000000000,
       world: 'Descubra',
       dailyExperience: {
