@@ -22,6 +22,7 @@ model Character {
   id              String            @id @default(uuid())
   name            String            @unique
   world           String
+  vocation        String
   level           Int
   experience      BigInt
   streak          Int               @default(1)
@@ -33,12 +34,16 @@ model Character {
   userId          String?
   dailyExperience DailyExperience[]
   profitHistory   ProfitEntry[]
+
+  PartyMember PartyMember[]
 }
 
 model User {
-  id         String      @id @default(uuid())
-  email      String      @unique
-  characters Character[]
+  id              String        @id @default(uuid())
+  email           String        @unique
+  characters      Character[]
+  partyMembership PartyMember[]
+  createdParties  Party[]       @relation("CreatedParties")
 }
 
 model ProfitEntry {
@@ -75,4 +80,30 @@ model DailyExperience {
   characterId String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model Party {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  inviteCode  String        @unique @default(cuid())
+  isActive    Boolean       @default(true)
+  maxMembers  Int           @default(5)
+  createdBy   String
+  creator     User          @relation("CreatedParties", fields: [createdBy], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  members     PartyMember[]
+}
+
+model PartyMember {
+  id          String    @id @default(uuid())
+  partyId     String
+  party       Party     @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id])
+  isLeader    Boolean   @default(false)
+  joinedAt    DateTime  @default(now())
 }

@@ -1,20 +1,20 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { chunk } from 'lodash';
+import { PrismaService } from 'src/prisma.service';
 import { WorldsService } from '../worlds/worlds.service';
 import {
   HighscoreList,
   Highscores,
 } from './entities/seed-players-experience.entity';
-import { SchedulerRegistry } from '@nestjs/schedule';
-import { PrismaService } from 'src/prisma.service';
-import { chunk } from 'lodash';
 
 @Injectable()
 export class SeedPlayersExperienceService implements OnModuleInit {
   private readonly BATCH_SIZE = 100;
   private readonly TOTAL_PAGES = 20;
-  private readonly CONCURRENT_WORLDS = 5; // Aumentado para melhor performance
+  private readonly CONCURRENT_WORLDS = 5;
 
   constructor(
     private readonly httpService: HttpService,
@@ -27,12 +27,10 @@ export class SeedPlayersExperienceService implements OnModuleInit {
   onModuleInit() {
     const cronTime = this.configService.get('CRON_SEED_PLAYERS_CONFIG');
 
-    // Configurar manualmente a função cron
     const callback = () => {
       this.seedPlayersExperience();
     };
 
-    // Adicionar o job ao scheduler
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { CronJob } = require('cron');
@@ -57,7 +55,7 @@ export class SeedPlayersExperienceService implements OnModuleInit {
     try {
       const { data } = await this.httpService.axiosRef.get<Highscores>(
         `${this.configService.get<string>('TIBIA_DATA_API_URL')}/highscores/${world}/experience/all/${page}`,
-        { timeout: 10000 }, // Adicionado timeout para evitar promessas pendentes
+        { timeout: 10000 },
       );
       return data.highscores.highscore_list;
     } catch (error) {
@@ -69,9 +67,26 @@ export class SeedPlayersExperienceService implements OnModuleInit {
     }
   }
 
-  // Função auxiliar para obter apenas a parte da data (sem hora)
   private getDateOnly(date: Date): string {
     return date.toISOString().split('T')[0];
+  }
+
+  private async fetchCharacterDetails(name: string): Promise<any> {
+    try {
+      const { data } = await this.httpService.axiosRef.get(
+        `${this.configService.get<string>('TIBIA_DATA_API_URL')}/character/${encodeURIComponent(
+          name,
+        )}`,
+        { timeout: 10000 },
+      );
+      return data.character;
+    } catch (error) {
+      Logger.warn(
+        `Failed to fetch character details for ${name}:`,
+        error.message,
+      );
+      return null;
+    }
   }
 
   private async processWorld(world: string): Promise<void> {
@@ -79,12 +94,10 @@ export class SeedPlayersExperienceService implements OnModuleInit {
     try {
       Logger.log(`Starting to process world: ${world}`);
 
-      // Fetch all pages for this world with better concurrency
       const fetchPromises = Array.from({ length: this.TOTAL_PAGES }, (_, i) =>
         this.fetchHighscorePage(i + 1, world),
       );
 
-      // Use Promise.allSettled para garantir que uma falha não impeça o processamento dos outros
       const results = await Promise.allSettled(fetchPromises);
       const allHighscores: HighscoreList[] = [];
 
@@ -103,21 +116,17 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         return;
       }
 
-      // Remover duplicatas com melhor performance usando Map
       const uniqueHighscores = Array.from(
         new Map(allHighscores.map((item) => [item.name, item])).values(),
       );
 
-      // Pegar a data atual (apenas a parte da data, sem hora)
       const today = new Date();
       const todayDateOnly = this.getDateOnly(today);
 
-      // Determinar a data de ontem
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayDateOnly = this.getDateOnly(yesterday);
 
-      // Verificar se já processamos este mundo hoje
       const todayRecordsCount = await this.prismaService.dailyExperience.count({
         where: {
           character: { world },
@@ -130,18 +139,21 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         return;
       }
 
-      // Buscar todos os personagens existentes
       const existingCharacters = await this.prismaService.character.findMany({
         where: { world },
-        select: { id: true, name: true, streak: true, experience: true },
+        select: {
+          id: true,
+          name: true,
+          streak: true,
+          experience: true,
+          vocation: true,
+        },
       });
 
-      // Criar mapas para acesso rápido
       const characterByName = new Map(
         existingCharacters.map((c) => [c.name, c]),
       );
 
-      // Buscar experiências de ontem para cálculo de streak
       const yesterdayExperiences =
         await this.prismaService.dailyExperience.findMany({
           where: {
@@ -155,17 +167,54 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         yesterdayExperiences.map((exp) => [exp.characterId, exp.value]),
       );
 
-      // Preparar operações em lote
       const newCharacters = [];
       const newDailyExperiences = [];
       const characterUpdates = [];
 
-      // Timestamp para registros
+      // Identificar personagens que precisam de vocation
+      const charactersNeedingVocation = uniqueHighscores.filter((data) => {
+        const existingChar = characterByName.get(data.name);
+        return !existingChar || !existingChar.vocation;
+      });
+
+      // Fetch vocation data em lotes para personagens que precisam
+      const vocationDataMap = new Map();
+      if (charactersNeedingVocation.length > 0) {
+        Logger.log(
+          `Fetching vocation data for ${charactersNeedingVocation.length} characters`,
+        );
+
+        const vocationChunks = chunk(charactersNeedingVocation, 10);
+
+        for (const vocationChunk of vocationChunks) {
+          const vocationPromises = vocationChunk.map(async (data) => {
+            const characterDetails = await this.fetchCharacterDetails(
+              data.name,
+            );
+            return {
+              name: data.name,
+              vocation: characterDetails?.vocation || null,
+            };
+          });
+
+          const vocationResults = await Promise.allSettled(vocationPromises);
+
+          vocationResults.forEach((result) => {
+            if (result.status === 'fulfilled' && result.value.vocation) {
+              vocationDataMap.set(result.value.name, result.value.vocation);
+            }
+          });
+
+          // Pequeno delay entre chunks para não sobrecarregar a API
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+
       const currentTimestamp = new Date().toISOString();
 
-      // Processar os personagens
       for (const data of uniqueHighscores) {
         const existingChar = characterByName.get(data.name);
+        const vocation = vocationDataMap.get(data.name);
 
         if (!existingChar) {
           // É um personagem novo
@@ -174,29 +223,27 @@ export class SeedPlayersExperienceService implements OnModuleInit {
             world,
             level: data.level,
             experience: data.value,
-            streak: 1, // Novo personagem começa com streak 1
+            streak: 1,
+            vocation: vocation || null,
             createdAt: new Date(),
           };
           newCharacters.push(newChar);
         } else {
-          // É um personagem existente
           const characterId = existingChar.id;
           let currentStreak = existingChar.streak || 0;
           let shouldUpdateStreak = false;
 
-          // Verificar se teve ganho de XP ontem para o cálculo do streak
           const yesterdayExp = yesterdayExpMap.get(characterId);
-          const hadExpYesterday = yesterdayExp !== undefined && yesterdayExp > 0;
+          const hadExpYesterday =
+            yesterdayExp !== undefined && yesterdayExp > 0;
 
-          // Verificar se experiência aumentou desde o último registro
-          const expIncreased = data.value > existingChar.experience;
+          const expChanged = BigInt(data.value) !== existingChar.experience;
+          const needsVocationUpdate = !existingChar.vocation && vocation;
 
-          // Atualizar streak
           if (hadExpYesterday) {
-            currentStreak += 1; // Incrementar streak se teve experiência ontem
+            currentStreak += 1;
             shouldUpdateStreak = true;
-          } else if (expIncreased) {
-            // Se não teve exp ontem mas tem hoje, resetar para 1
+          } else if (expChanged) {
             currentStreak = 1;
             shouldUpdateStreak = true;
           } else {
@@ -204,21 +251,26 @@ export class SeedPlayersExperienceService implements OnModuleInit {
             shouldUpdateStreak = true;
           }
 
-          // Atualizar caractere somente se necessário
-          if (shouldUpdateStreak || expIncreased) {
+          if (shouldUpdateStreak || expChanged || needsVocationUpdate) {
+            const updates: any = {
+              streak: currentStreak,
+            };
+
+            if (expChanged) {
+              updates.experience = data.value;
+              updates.level = data.level;
+            }
+
+            if (needsVocationUpdate) {
+              updates.vocation = vocation;
+            }
+
             characterUpdates.push({
               id: characterId,
-              updates: {
-                streak: currentStreak,
-                ...(expIncreased && {
-                  experience: data.value,
-                  level: data.level,
-                }),
-              },
+              updates,
             });
           }
 
-          // Sempre criar um novo registro diário
           newDailyExperiences.push({
             characterId,
             date: currentTimestamp,
@@ -228,9 +280,6 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         }
       }
 
-      // Processar em lotes para melhor performance
-
-      // 1. Criar novos personagens
       if (newCharacters.length > 0) {
         const characterChunks = chunk(newCharacters, this.BATCH_SIZE);
         for (const batch of characterChunks) {
@@ -295,7 +344,7 @@ export class SeedPlayersExperienceService implements OnModuleInit {
 
       const executionTime = (Date.now() - startTime) / 1000;
       Logger.log(
-        `Processed world ${world} in ${executionTime.toFixed(2)}s: ${newCharacters.length} new characters, ${newDailyExperiences.length} daily experiences, ${characterUpdates.length} character updates`,
+        `Processed world ${world} in ${executionTime.toFixed(2)}s: ${newCharacters.length} new characters, ${newDailyExperiences.length} daily experiences, ${characterUpdates.length} character updates, ${vocationDataMap.size} vocations fetched`,
       );
     } catch (error) {
       Logger.error(

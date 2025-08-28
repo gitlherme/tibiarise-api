@@ -10,6 +10,7 @@ import { HttpModule } from '@nestjs/axios';
 import { VerifyCharacterModule } from './modules/verify-character/verify-character.module';
 import { UserModule } from './modules/user/user.module';
 import { ProfitManagerModule } from './modules/profit-manager/profit-manager.module';
+import { PartyManagerModule } from './modules/party-manager/party-manager.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ProfitManagerModule } from './modules/profit-manager/profit-manager.mod
     VerifyCharacterModule,
     UserModule,
     ProfitManagerModule,
+    PartyManagerModule,
   ],
   controllers: [],
   providers: [],

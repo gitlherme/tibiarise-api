@@ -6,6 +6,7 @@ export interface ExperienceGain {
   characterName: string;
   level: number;
   world: string;
+  vocation: string;
   experienceGained: number;
   experiencePerHour: number;
   percentageGain: number;
@@ -86,6 +87,7 @@ export class ExperienceByWorldService {
         id: true,
         name: true,
         level: true,
+        vocation: true,
       },
     });
 
@@ -166,6 +168,7 @@ export class ExperienceByWorldService {
           characterId,
           characterName: character.name,
           level: endExp.level,
+          vocation: character.vocation,
           world,
           experienceGained: expGained,
           experiencePerHour: expPerHour,
