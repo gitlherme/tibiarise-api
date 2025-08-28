@@ -22,7 +22,7 @@ model Character {
   id              String            @id @default(uuid())
   name            String            @unique
   world           String
-  vocation        String
+  vocation        String?
   level           Int
   experience      BigInt
   streak          Int               @default(1)
