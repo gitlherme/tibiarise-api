@@ -171,87 +171,49 @@ export class SeedPlayersExperienceService implements OnModuleInit {
       const newDailyExperiences = [];
       const characterUpdates = [];
 
-      // Identificar personagens que precisam de vocation
-      const charactersNeedingVocation = uniqueHighscores.filter((data) => {
-        const existingChar = characterByName.get(data.name);
-        return !existingChar || !existingChar.vocation;
-      });
-
-      // Fetch vocation data em lotes para personagens que precisam
-      const vocationDataMap = new Map();
-      if (charactersNeedingVocation.length > 0) {
-        Logger.log(
-          `Fetching vocation data for ${charactersNeedingVocation.length} characters`,
-        );
-
-        const vocationChunks = chunk(charactersNeedingVocation, 10);
-
-        for (const vocationChunk of vocationChunks) {
-          const vocationPromises = vocationChunk.map(async (data) => {
-            const characterDetails = await this.fetchCharacterDetails(
-              data.name,
-            );
-            return {
-              name: data.name,
-              vocation: characterDetails?.vocation || null,
-            };
-          });
-
-          const vocationResults = await Promise.allSettled(vocationPromises);
-
-          vocationResults.forEach((result) => {
-            if (result.status === 'fulfilled' && result.value.vocation) {
-              vocationDataMap.set(result.value.name, result.value.vocation);
-            }
-          });
-
-          // Pequeno delay entre chunks para não sobrecarregar a API
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-      }
-
       const currentTimestamp = new Date().toISOString();
 
       for (const data of uniqueHighscores) {
         const existingChar = characterByName.get(data.name);
-        const vocation = vocationDataMap.get(data.name);
 
         if (!existingChar) {
-          // É um personagem novo
           const newChar = {
             name: data.name,
             world,
             level: data.level,
             experience: data.value,
             streak: 1,
-            vocation: vocation || null,
+            vocation: data.vocation || null,
             createdAt: new Date(),
           };
           newCharacters.push(newChar);
         } else {
           const characterId = existingChar.id;
           let currentStreak = existingChar.streak || 0;
-          let shouldUpdateStreak = false;
 
           const yesterdayExp = yesterdayExpMap.get(characterId);
           const hadExpYesterday =
             yesterdayExp !== undefined && yesterdayExp > 0;
-
           const expChanged = BigInt(data.value) !== existingChar.experience;
-          const needsVocationUpdate = !existingChar.vocation && vocation;
 
-          if (hadExpYesterday) {
-            currentStreak += 1;
-            shouldUpdateStreak = true;
-          } else if (expChanged) {
-            currentStreak = 1;
-            shouldUpdateStreak = true;
+          let hadExpToday = false;
+          if (yesterdayExp !== undefined) {
+            hadExpToday = BigInt(data.value) > yesterdayExp;
           } else {
-            currentStreak = 0;
-            shouldUpdateStreak = true;
+            hadExpToday = BigInt(data.value) > 0;
           }
 
-          if (shouldUpdateStreak || expChanged || needsVocationUpdate) {
+          if (hadExpToday) {
+            if (hadExpYesterday) {
+              currentStreak += 1;
+            } else {
+              currentStreak = 1;
+            }
+          } else {
+            currentStreak = 0;
+          }
+
+          if (expChanged || existingChar.streak !== currentStreak) {
             const updates: any = {
               streak: currentStreak,
             };
@@ -259,10 +221,6 @@ export class SeedPlayersExperienceService implements OnModuleInit {
             if (expChanged) {
               updates.experience = data.value;
               updates.level = data.level;
-            }
-
-            if (needsVocationUpdate) {
-              updates.vocation = vocation;
             }
 
             characterUpdates.push({
@@ -289,7 +247,6 @@ export class SeedPlayersExperienceService implements OnModuleInit {
           });
         }
 
-        // Buscar IDs dos novos personagens
         const newCharacterNames = newCharacters.map((c) => c.name);
         const createdCharacters = await this.prismaService.character.findMany({
           where: {
@@ -299,7 +256,6 @@ export class SeedPlayersExperienceService implements OnModuleInit {
           select: { id: true, name: true },
         });
 
-        // Adicionar registros diários para os novos personagens
         const newCharacterDailies = createdCharacters.map((c) => ({
           characterId: c.id,
           date: currentTimestamp,
@@ -311,7 +267,6 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         newDailyExperiences.push(...newCharacterDailies);
       }
 
-      // 2. Atualizar personagens existentes em paralelo
       if (characterUpdates.length > 0) {
         const updateChunks = chunk(
           characterUpdates,
@@ -331,7 +286,6 @@ export class SeedPlayersExperienceService implements OnModuleInit {
         );
       }
 
-      // 3. Criar registros diários em lotes
       if (newDailyExperiences.length > 0) {
         const dailyChunks = chunk(newDailyExperiences, this.BATCH_SIZE);
         for (const batch of dailyChunks) {
@@ -344,7 +298,7 @@ export class SeedPlayersExperienceService implements OnModuleInit {
 
       const executionTime = (Date.now() - startTime) / 1000;
       Logger.log(
-        `Processed world ${world} in ${executionTime.toFixed(2)}s: ${newCharacters.length} new characters, ${newDailyExperiences.length} daily experiences, ${characterUpdates.length} character updates, ${vocationDataMap.size} vocations fetched`,
+        `Processed world ${world} in ${executionTime.toFixed(2)}s: ${newCharacters.length} new characters, ${newDailyExperiences.length} daily experiences, ${characterUpdates.length} character updates`,
       );
     } catch (error) {
       Logger.error(

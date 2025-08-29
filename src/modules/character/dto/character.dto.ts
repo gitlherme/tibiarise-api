@@ -7,7 +7,7 @@ export class CharacterDataMapper {
     experienceTable: DailyExperience[],
     isVerified: boolean = false,
     verifiedAt: Date | null = null,
-    streak: number = 0
+    streak: number = 0,
   ) {
     const experienceTableOutput = experienceTable.map((day, index) => {
       if (index !== 0) {
@@ -46,7 +46,9 @@ export class CharacterDataMapper {
           rank: character.character.guild.rank,
         },
       },
-      experienceTable: experienceTableOutput.filter(day => day !== undefined && day !== null).reverse(),
+      experienceTable: experienceTableOutput
+        .filter((day) => day !== undefined && day !== null)
+        .reverse(),
     };
   }
 }
