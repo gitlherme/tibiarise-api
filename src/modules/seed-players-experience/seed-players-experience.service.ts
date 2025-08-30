@@ -193,14 +193,14 @@ export class SeedPlayersExperienceService implements OnModuleInit {
 
           const yesterdayExp = yesterdayExpMap.get(characterId);
           const hadExpYesterday =
-            yesterdayExp !== undefined && yesterdayExp > 0;
+            yesterdayExp !== undefined && yesterdayExp !== 0n;
           const expChanged = BigInt(data.value) !== existingChar.experience;
 
           let hadExpToday = false;
           if (yesterdayExp !== undefined) {
-            hadExpToday = BigInt(data.value) > yesterdayExp;
+            hadExpToday = BigInt(data.value) !== yesterdayExp;
           } else {
-            hadExpToday = BigInt(data.value) > 0;
+            hadExpToday = BigInt(data.value) !== 0n;
           }
 
           if (hadExpToday) {
