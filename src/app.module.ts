@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CharacterModule } from './modules/character/character.module';
 import { DeleteOldExperiencesModule } from './modules/delete-old-experiences/delete-old-experiences.module';
 import { ExperienceByWorldModule } from './modules/experience-by-world/experience-by-world.module';
+import { HealthModule } from './modules/health/health.module';
 import { PartyManagerModule } from './modules/party-manager/party-manager.module';
 import { ProfitManagerModule } from './modules/profit-manager/profit-manager.module';
 import { SeedPlayersExperienceModule } from './modules/seed-players-experience/seed-players-experience.module';
