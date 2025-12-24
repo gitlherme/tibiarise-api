@@ -47,15 +47,11 @@ ENV NODE_ENV=production
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
 
-# Copy node_modules from deps (includes all dependencies)
-COPY --from=deps /app/node_modules ./node_modules
+# Copy node_modules from builder (includes generated Prisma Client)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy Prisma schema and migrations (needed for migrations)
 COPY prisma ./prisma
-
-# Copy generated Prisma Client from builder
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
