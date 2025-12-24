@@ -39,23 +39,23 @@ RUN pnpm build
 # ============================================
 FROM node:22-alpine AS runner
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
 WORKDIR /app
 
 # Set production environment
 ENV NODE_ENV=production
 
-# Install production dependencies only
+# Copy package files
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+
+# Copy node_modules from deps (includes all dependencies)
+COPY --from=deps /app/node_modules ./node_modules
 
 # Copy Prisma schema and migrations (needed for migrations)
 COPY prisma ./prisma
 
-# Generate Prisma Client for production
-RUN pnpm prisma:generate
+# Copy generated Prisma Client from builder
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
@@ -64,4 +64,4 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 3000
 
 # Run migrations and start the app
-CMD ["sh", "-c", "pnpm prisma:migrate:deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
