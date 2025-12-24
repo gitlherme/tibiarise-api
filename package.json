@@ -21,11 +21,11 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "db": "pnpm dlx prisma db",
-    "prisma:generate": "pnpm dlx prisma generate",
-    "prisma:migrate": "pnpm dlx prisma migrate dev",
-    "prisma:migrate:deploy": "pnpm dlx prisma migrate deploy",
-    "prisma:studio": "pnpm dlx prisma studio"
+    "db": "npx prisma db",
+    "prisma:generate": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate dev",
+    "prisma:migrate:deploy": "npx prisma migrate deploy",
+    "prisma:studio": "npx prisma studio"
   },
   "dependencies": {
     "@libsql/client": "^0.14.0",
